@@ -1,0 +1,1 @@
+## This is a project to generate images from given text descriptions using GANs
