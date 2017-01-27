@@ -8,7 +8,7 @@ def conv2d(x,out_dim,k_h=5,k_w=5,strides=[1,2,2,1],padding='SAME',train=True,nam
         w = tf.get_variable(name = 'filter',
                             dtype = tf.float32,
                             shape = [k_h,k_w,input_shape[-1],out_dim],
-                            initializer = tf.truncated_normal_initializer(mean=0.0,stddev=0.02))
+                            initializer = tf.truncated_normal_initializer(stddev=0.02))
         b = tf.get_variable(name = 'bias',
                             dtype = tf.float32,
                             shape = [out_dim],
@@ -16,7 +16,7 @@ def conv2d(x,out_dim,k_h=5,k_w=5,strides=[1,2,2,1],padding='SAME',train=True,nam
         conv = (tf.nn.bias_add(tf.nn.conv2d(x,w,strides = strides,padding = padding),b))
         if train:
             conv = tf.contrib.layers.batch_norm(conv,is_training = train)
-    return lrelu(conv)
+    return tf.nn.relu(conv)
 
 def lrelu(x,leak=0.2):
     return tf.maximum(x,leak*x)
@@ -27,7 +27,7 @@ def conv2d_transpose(x,output_shape,k_h=5,k_w=5,strides=[1,2,2,1],padding='SAME'
         w = tf.get_variable(name = 'filter',
                             dtype = tf.float32,
                             shape = [k_h,k_w,output_shape[-1],input_shape[-1]],
-                            initializer = tf.truncated_normal_initializer(mean=0.0,stddev=0.02))
+                            initializer = tf.random_normal_initializer(stddev=0.02))
         b = tf.get_variable(name = 'bias',
                             dtype = tf.float32,
                             shape = [output_shape[-1]],
@@ -39,7 +39,7 @@ def conv2d_transpose(x,output_shape,k_h=5,k_w=5,strides=[1,2,2,1],padding='SAME'
         if train:
             conv = tf.contrib.layers.batch_norm(conv,is_training = train)
         if act:
-            conv = lrelu(conv)
+            conv = tf.nn.relu(conv)
     return conv
 
 def Linear(x,out_shape,train=True,name='linear',act=True):
@@ -48,7 +48,7 @@ def Linear(x,out_shape,train=True,name='linear',act=True):
         w = tf.get_variable(name = 'weights',
                             dtype = tf.float32,
                             shape = [input_shape[-1],out_shape],
-                            initializer=tf.truncated_normal_initializer(mean=0.0,stddev=0.02))
+                            initializer=tf.random_normal_initializer(stddev=0.02))
         b = tf.get_variable(name = 'bias',
                             dtype = tf.float32,
                             shape = [out_shape],

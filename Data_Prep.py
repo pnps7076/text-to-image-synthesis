@@ -4,6 +4,8 @@ import tensorflow as tf
 import numpy as np
 import glob
 from Utils.utils import make_square_image
+import skimage.io
+import skimage.transform
 
 """Class file to prepare data and labels to pass to Model(DCGAN)
 Yet to add mean normalization
@@ -38,7 +40,8 @@ class Data_Prep:
         else:
             idx = np.random.choice(self.nImgs,self.batch_size)
         for i in idx:
-            curr_img = self.process(cv2.imread(self.filenames[i]))
+            curr_img = skimage.io.imread(self.filenames[i])
+            curr_img = skimage.transform.resize(curr_img,(64,64))
             #curr_img = curr_img/255.
             curr_imgs.append(curr_img)
             #not added mean normalization
