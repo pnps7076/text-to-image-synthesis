@@ -28,9 +28,6 @@ def train_fn(nEpochs,image_path,saved_sess=None):
             print sess.run(vars['vars_d'][-1])
         else:
             sess.run(tf.global_variables_initializer())
-        sess = tf.Session()
-        sess.run(tf.initialize_all_variables())
-        saver = tf.train.Saver()
         n = int(dp.nImgs*nEpochs/dcgan.batch_size)
         curr_loss_g = curr_loss_d = 1.
         for i in range(n):
