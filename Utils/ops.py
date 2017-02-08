@@ -2,7 +2,11 @@
 import numpy as np
 import tensorflow as tf
 
-def conv2d(x,out_dim,k_h=5,k_w=5,strides=[1,2,2,1],padding='SAME',train=True,name='conv2d'):
+
+def lrelu(x,leak=0.2):
+    return tf.maximum(x,leak*x)
+
+def conv2d(x,out_dim,k_h=5,k_w=5,strides=[1,2,2,1],padding='SAME',train=True,name='conv2d',act=True):
     input_shape = x.get_shape()
     with tf.variable_scope(name):
         w = tf.get_variable(name = 'filter',
@@ -16,10 +20,9 @@ def conv2d(x,out_dim,k_h=5,k_w=5,strides=[1,2,2,1],padding='SAME',train=True,nam
         conv = (tf.nn.bias_add(tf.nn.conv2d(x,w,strides = strides,padding = padding),b))
         if train:
             conv = tf.contrib.layers.batch_norm(conv,is_training = train)
-    return tf.nn.relu(conv)
-
-def lrelu(x,leak=0.2):
-    return tf.maximum(x,leak*x)
+        if act:
+            conv = lrelu(conv)
+    return conv
 
 def conv2d_transpose(x,output_shape,k_h=5,k_w=5,strides=[1,2,2,1],padding='SAME',train=True,name='upconv2d',act=True):
     input_shape = x.get_shape()
@@ -39,7 +42,7 @@ def conv2d_transpose(x,output_shape,k_h=5,k_w=5,strides=[1,2,2,1],padding='SAME'
         if train:
             conv = tf.contrib.layers.batch_norm(conv,is_training = train)
         if act:
-            conv = tf.nn.relu(conv)
+            conv = lrelu(conv)
     return conv
 
 def Linear(x,out_shape,train=True,name='linear',act=True):
@@ -57,5 +60,5 @@ def Linear(x,out_shape,train=True,name='linear',act=True):
         if train:
             out = tf.contrib.layers.batch_norm(out,is_training = train)
         if act:
-            out = tf.nn.relu(out)
+            out = lrelu(out)
     return out

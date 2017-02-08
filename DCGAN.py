@@ -11,10 +11,11 @@ Discriminator is a network composed of multiple convolution layers which ends
 in a softmax layer.
 """
 class DCGAN:
-    def __init__(self,batch_size,inp_size,output_size,z_dim,learning_rate):
+    def __init__(self,batch_size,inp_size,output_size,z_dim,caption_dim,learning_rate):
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.inp_size = inp_size
+        self.caption_dim = caption_dim
         self.output_size = output_size
         self.z_dim = z_dim
         self.loss_G = None
@@ -39,18 +40,23 @@ class DCGAN:
     def create_placeholders(self):
         """Function to create placeholders for DCGAN model."""
         self.z = tf.placeholder(tf.float32,shape = [self.batch_size,self.z_dim],name='inp_noise') #placeholder for input noise to generator
-        self.fake_images = tf.placeholder(tf.float32,shape = [self.batch_size,self.output_size,self.output_size,3],name='fake_img') #feed fake image to discriminator
         self.train = tf.placeholder(tf.bool,shape=[],name='train_indicator') #to use for batchnorm
         self.real_images = tf.placeholder(tf.float32,shape = [self.batch_size,self.output_size,self.output_size,3],name='real_img') #feed real image to discriminator
+        self.real_caption = tf.placeholder(tf.float32,shape = [self.batch_size,self.caption_dim],name='real_caption')
+        self.wrong_caption = tf.placeholder(tf.float32,shape = [self.batch_size,self.caption_dim],name='wrong_caption')
 
-    def create_generator(self,train=True):
+    def create_generator(self,z,caption,train=True):
         """Function to create generator and store its weights in G_weights
         Returns:
             g6_out: A batch of tensors of shape [batch_size,s,s,3] which are the generated images
         """
+        s = int(self.output_size)
+        s,s2,s4,s8 = int(s),int(s/2),int(s/4),int(s/8)
         g1_inp_shape = (self.inp_size**2)*512
         with tf.variable_scope('Generator') as outer_scope:
-            self.g_inp = Linear(self.z,g1_inp_shape,name='Noise2G',train=train)
+            caption_reduced = Linear(caption,128,name='Caption_Dim_Reduction',train=train)
+            noise_caption = tf.concat(1,[z,caption_reduced])
+            self.g_inp = Linear(noise_caption,g1_inp_shape,name='Noise2G',train=train)
             self.g_inp = tf.reshape(self.g_inp,[self.batch_size,self.inp_size,self.inp_size,512])
             self.g1_out = conv2d_transpose(self.g_inp,
                                             output_shape=[self.batch_size,s8,s8,256],
@@ -72,33 +78,43 @@ class DCGAN:
             self.gen_imgs = (tf.nn.tanh(self.g4_out)/2. + 0.5)
             return (tf.nn.tanh(self.g4_out)/2. + 0.5)
 
-    def create_discriminator(self,X,train=True,reuse=False):
+    def create_discriminator(self,X,caption,train=True,reuse=False):
         with tf.variable_scope('Discriminator',reuse = reuse) as outer_scope:
             self.conv1_out = conv2d(X,64,train=train,name='Disc1')
             self.conv2_out = conv2d(self.conv1_out,128,train=train,name='Disc2')
             self.conv3_out = conv2d(self.conv2_out,256,train=train,name='Disc3')
             self.conv4_out = conv2d(self.conv3_out,512,train=train,name='Disc4')
-            n,h,w,c = self.conv4_out.get_shape()
-            self.conv4_out_reshaped = tf.reshape(self.conv4_out,[self.batch_size,-1])
-            self.disc_out = Linear(self.conv4_out_reshaped,1,train=False,name='Output',act=False)
-            self.convs = [self.conv1_out,self.conv2_out,self.conv3_out,self.conv4_out,self.disc_out]
+            n,h,w,c = self.conv4_out.get_shape().as_list()
+            caption_reduced = Linear(caption,128,name='Caption_Dim_Reduction_Disc',train=train)
+            caption_rshp = tf.reshape(caption,[self.batch_size,h,w,-1])
+            self.conv_cap_cat = tf.concat(3,[self.conv4_out,caption_rshp])
+            self.conv5_out = conv2d(self.conv_cap_cat,256,k_h=1,k_w=1,strides=[1,1,1,1])
+            self.disc_out = conv2d(self.conv5_out,1,k_h=4,k_w=4,
+                                                    strides=[1,1,1,1],
+                                                    padding='VALID',
+                                                    train=False,
+                                                    name='Output',act=False)
+            self.convs = [self.conv1_out,self.conv2_out,self.conv3_out,self.conv4_out,self.conv_cap_cat,self.conv5_out,self.disc_out]
             return self.disc_out,tf.nn.sigmoid(self.disc_out)
 
     def build_model(self):
-        gen_imgs = self.create_generator()
-        disc_real,_disc_real = self.create_discriminator(self.real_images)
-        disc_fake,_disc_fake = self.create_discriminator(gen_imgs,reuse = True)
-        gen_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_fake,tf.ones_like(disc_fake)))
+        gen_imgs = self.create_generator(self.z,self.real_caption)
+        disc_real,_disc_real = self.create_discriminator(self.real_images,self.real_caption)
+        disc_fake_img,_disc_fake_img = self.create_discriminator(gen_imgs,self.real_caption,reuse = True)
+        disc_wrong_img,_disc_wrong_img = self.create_discriminator(self.real_images,self.wrong_caption,reuse=True)
+        gen_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_fake_img,tf.ones_like(disc_fake_img)))
         disc_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_real,tf.ones_like(disc_real)))
-        disc_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_fake,tf.zeros_like(disc_fake)))
-        disc_loss = disc_loss_fake + disc_loss_real
+        disc_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_fake_img,tf.zeros_like(disc_fake_img)))
+        disc_loss_wrong = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_wrong_img,tf.zeros_like(disc_wrong_img)))
+        disc_loss = disc_loss_real + (disc_loss_fake + disc_loss_wrong)/2
         d_vars = [var for var in tf.trainable_variables() if 'Discriminator' in var.name]
         g_vars = [var for var in tf.trainable_variables() if 'Generator' in var.name]
         loss = {
             'loss_d':disc_loss,
             'loss_g':gen_loss,
             'loss_d_real':disc_loss_real,
-            'loss_d_fake':disc_loss_fake
+            'loss_d_fake':disc_loss_fake,
+            'loss_d_wrong':disc_loss_wrong
         }
         vars = {
             'vars_d': d_vars,
@@ -106,30 +122,14 @@ class DCGAN:
         }
         outputs = {
             'disc_real': _disc_real,
-            'disc_fake': _disc_fake,
+            'disc_fake': _disc_fake_img,
+            'disc_wrong': _disc_wrong_img,
             'gen_imgs': gen_imgs
         }
         self.print_upconvs()
         self.print_convs()
         return loss,vars,outputs
 
-
-    def create_loss(self):
-        self.reuse = None
-        self.gener_out = self.create_generator(self.train,self.reuse)
-        self.adv_pos = tf.reshape(self.create_discriminator(self.d_inp,self.train,self.reuse),[self.batch_size,1])
-        self.reuse = True
-        self.adv_neg = tf.reshape(self.create_discriminator(self.gener_out,self.train,self.reuse),[self.batch_size,1])
-        self.loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.adv_neg,tf.ones_like(self.adv_neg)))
-        self.loss_D_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.adv_pos,tf.ones_like(self.adv_pos)))
-        self.loss_D_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.adv_neg,tf.zeros_like(self.adv_pos)))
-        self.loss_D = self.loss_D_real + self.loss_D_fake
-        print "____Loss op created____"
-
-    def create_optim(self):
-        self.optim_G = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss_G)
-        self.optim_D = tf.train.AdamOptimizer(learning_rate = self.learning_rate).minimize(self.loss_D)
-        print "____Optim op created____"
 
 if __name__ == "__main__":
     dgn = DCGAN(batch_size=128, inp_size=4, output_size=64, z_dim=100, learning_rate=0.0007)
