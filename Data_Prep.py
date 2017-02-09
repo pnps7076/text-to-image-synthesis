@@ -37,7 +37,7 @@ class Data_Prep:
                 """
         curr_imgs = []
         right_captions = []
-        wrong_captions = []
+        wrong_imgs = []
         if overfit:
             idx = range(self.batch_size)
         else:
@@ -46,15 +46,15 @@ class Data_Prep:
         for i,j in zip(idx,idx_):
             curr_img = skimage.io.imread(self.path + self.filenames[i] + '.jpg')
             curr_img = skimage.transform.resize(curr_img,(64,64))
+            wrong_img = skimage.io.imread(self.path + self.filenames[j] + '.jpg')
+            wrong_img = skimage.transform.resize(wrong_img,(64,64))
             right_captions.append(np.load('../captions_uniskip/' + self.filenames[i] + '.npy')[randInt(10)])
-            wrong_captions.append(np.load('../captions_uniskip/' + self.filenames[j] + '.npy')[randInt(10)])
-            #curr_img = curr_img/255.
             curr_imgs.append(curr_img)
-            #not added mean normalization
+            wrong_imgs.append(wrong_img)
         curr_imgs = np.array(curr_imgs).astype('float32')
         right_captions = np.array(right_captions)
-        wrong_captions = np.array(wrong_captions)
-        return curr_imgs,right_captions,wrong_captions
+        wrong_imgs = np.array(wrong_imgs).astype('float32')
+        return curr_imgs,right_captions,wrong_imgs
 
     def process(self,img):
         img = make_square_image(img,64)

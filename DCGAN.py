@@ -43,7 +43,7 @@ class DCGAN:
         self.train = tf.placeholder(tf.bool,shape=[],name='train_indicator') #to use for batchnorm
         self.real_images = tf.placeholder(tf.float32,shape = [self.batch_size,self.output_size,self.output_size,3],name='real_img') #feed real image to discriminator
         self.real_caption = tf.placeholder(tf.float32,shape = [self.batch_size,self.caption_dim],name='real_caption')
-        self.wrong_caption = tf.placeholder(tf.float32,shape = [self.batch_size,self.caption_dim],name='wrong_caption')
+        self.wrong_images = tf.placeholder(tf.float32,shape = [self.batch_size,self.output_size,self.output_size,3],name='wrong_img')
 
     def create_generator(self,z,caption,train=True):
         """Function to create generator and store its weights in G_weights
@@ -88,12 +88,9 @@ class DCGAN:
             caption_reduced = Linear(caption,128,name='Caption_Dim_Reduction_Disc',train=train)
             caption_rshp = tf.reshape(caption,[self.batch_size,h,w,-1])
             self.conv_cap_cat = tf.concat(3,[self.conv4_out,caption_rshp])
-            self.conv5_out = conv2d(self.conv_cap_cat,256,k_h=1,k_w=1,strides=[1,1,1,1])
-            self.disc_out = conv2d(self.conv5_out,1,k_h=4,k_w=4,
-                                                    strides=[1,1,1,1],
-                                                    padding='VALID',
-                                                    train=False,
-                                                    name='Output',act=False)
+            self.conv5_out = conv2d(self.conv_cap_cat,256,k_h=1,k_w=1,strides=[1,1,1,1],train=train)
+            self.conv5_out_rshp = tf.reshape(self.conv5_out,[self.batch_size,-1])
+            self.disc_out = Linear(self.conv5_out_rshp,1,train=False,act=False)
             self.convs = [self.conv1_out,self.conv2_out,self.conv3_out,self.conv4_out,self.conv_cap_cat,self.conv5_out,self.disc_out]
             return self.disc_out,tf.nn.sigmoid(self.disc_out)
 
@@ -101,12 +98,12 @@ class DCGAN:
         gen_imgs = self.create_generator(self.z,self.real_caption)
         disc_real,_disc_real = self.create_discriminator(self.real_images,self.real_caption)
         disc_fake_img,_disc_fake_img = self.create_discriminator(gen_imgs,self.real_caption,reuse = True)
-        disc_wrong_img,_disc_wrong_img = self.create_discriminator(self.real_images,self.wrong_caption,reuse=True)
+        disc_wrong_img,_disc_wrong_img = self.create_discriminator(self.wrong_images,self.real_caption,reuse=True)
         gen_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_fake_img,tf.ones_like(disc_fake_img)))
         disc_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_real,tf.ones_like(disc_real)))
         disc_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_fake_img,tf.zeros_like(disc_fake_img)))
         disc_loss_wrong = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_wrong_img,tf.zeros_like(disc_wrong_img)))
-        disc_loss = disc_loss_real + (disc_loss_fake + disc_loss_wrong)/2
+        disc_loss = disc_loss_real + disc_loss_fake + disc_loss_wrong
         d_vars = [var for var in tf.trainable_variables() if 'Discriminator' in var.name]
         g_vars = [var for var in tf.trainable_variables() if 'Generator' in var.name]
         loss = {
