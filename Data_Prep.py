@@ -7,6 +7,7 @@ from Utils.utils import make_square_image
 import skimage.io
 import skimage.transform
 import pandas as pd
+import pickle
 randInt = np.random.randint
 """Class file to prepare data and labels to pass to Model(DCGAN)
 Yet to add mean normalization
@@ -26,6 +27,7 @@ class Data_Prep:
     def get_filenames(self):
         """Function to read filenames of all images in path to self.filenames"""
         self.filenames = pd.read_csv('../image_names.csv',header=None)[0] #Only one column, hence [0] loads all filenames in self.filenames
+	self.im2cap = pickle.load(open('img_to_cap.pkl','r'))
         self.nImgs = len(self.filenames)
 
     def read_batch(self,overfit):
@@ -38,6 +40,7 @@ class Data_Prep:
         curr_imgs = []
         right_captions = []
         wrong_imgs = []
+	captions_txt = []
         if overfit:
             idx = range(self.batch_size)
         else:
@@ -48,13 +51,16 @@ class Data_Prep:
             curr_img = skimage.transform.resize(curr_img,(64,64))
             wrong_img = skimage.io.imread(self.path + self.filenames[j] + '.jpg')
             wrong_img = skimage.transform.resize(wrong_img,(64,64))
-            right_captions.append(np.load('../captions_uniskip/' + self.filenames[i] + '.npy')[randInt(10)])
+	    ind = randInt(10)
+            right_captions.append(np.load('../captions_uniskip/' + self.filenames[i] + '.npy')[ind])
+	    captions_txt.append(self.im2cap[self.filenames[i]][ind])
             curr_imgs.append(curr_img)
             wrong_imgs.append(wrong_img)
         curr_imgs = np.array(curr_imgs).astype('float32')
         right_captions = np.array(right_captions)
         wrong_imgs = np.array(wrong_imgs).astype('float32')
-        return curr_imgs,right_captions,wrong_imgs
+	captions_txt = np.array(captions_txt)
+        return curr_imgs,right_captions,wrong_imgs,captions_txt
 
     def process(self,img):
         img = make_square_image(img,64)

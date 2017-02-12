@@ -54,7 +54,7 @@ class DCGAN:
         s,s2,s4,s8 = int(s),int(s/2),int(s/4),int(s/8)
         g1_inp_shape = (self.inp_size**2)*512
         with tf.variable_scope('Generator') as outer_scope:
-            caption_reduced = Linear(caption,128,name='Caption_Dim_Reduction',train=train)
+            caption_reduced = Linear(caption,128,name='Caption_Dim_Reduction',train=False)
             noise_caption = tf.concat(1,[z,caption_reduced])
             self.g_inp = Linear(noise_caption,g1_inp_shape,name='Noise2G',train=train)
             self.g_inp = tf.reshape(self.g_inp,[self.batch_size,self.inp_size,self.inp_size,512])
@@ -80,18 +80,20 @@ class DCGAN:
 
     def create_discriminator(self,X,caption,train=True,reuse=False):
         with tf.variable_scope('Discriminator',reuse = reuse) as outer_scope:
-            self.conv1_out = conv2d(X,64,train=train,name='Disc1')
+            self.conv1_out = conv2d(X,64,train=False,name='Disc1')
             self.conv2_out = conv2d(self.conv1_out,128,train=train,name='Disc2')
             self.conv3_out = conv2d(self.conv2_out,256,train=train,name='Disc3')
             self.conv4_out = conv2d(self.conv3_out,512,train=train,name='Disc4')
             n,h,w,c = self.conv4_out.get_shape().as_list()
-            caption_reduced = Linear(caption,128,name='Caption_Dim_Reduction_Disc',train=train)
-            caption_rshp = tf.reshape(caption,[self.batch_size,h,w,-1])
-            self.conv_cap_cat = tf.concat(3,[self.conv4_out,caption_rshp])
-            self.conv5_out = conv2d(self.conv_cap_cat,256,k_h=1,k_w=1,strides=[1,1,1,1],train=train)
+            caption_reduced = Linear(caption,128,name='Caption_Dim_Reduction_Disc',train=False)
+            caption_exp = tf.expand_dims(caption_reduced,1)
+	    caption_exp = tf.expand_dims(caption_exp,2)
+	    caption_tiled = tf.tile(caption_exp,[1,4,4,1],name='tiled_captions')
+            self.conv_cap_cat = tf.concat(3,[self.conv4_out,caption_tiled])
+            self.conv5_out = conv2d(self.conv_cap_cat,512,k_h=1,k_w=1,strides=[1,1,1,1],train=train)
             self.conv5_out_rshp = tf.reshape(self.conv5_out,[self.batch_size,-1])
             self.disc_out = Linear(self.conv5_out_rshp,1,train=False,act=False)
-            self.convs = [self.conv1_out,self.conv2_out,self.conv3_out,self.conv4_out,self.conv_cap_cat,self.conv5_out,self.disc_out]
+            self.convs = [self.conv1_out,self.conv2_out,self.conv3_out,self.conv4_out,caption_tiled,self.conv5_out,self.disc_out]
             return self.disc_out,tf.nn.sigmoid(self.disc_out)
 
     def build_model(self):
@@ -103,7 +105,7 @@ class DCGAN:
         disc_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_real,tf.ones_like(disc_real)))
         disc_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_fake_img,tf.zeros_like(disc_fake_img)))
         disc_loss_wrong = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(disc_wrong_img,tf.zeros_like(disc_wrong_img)))
-        disc_loss = disc_loss_real + disc_loss_fake + disc_loss_wrong
+        disc_loss = disc_loss_real + (disc_loss_fake + disc_loss_wrong)/2
         d_vars = [var for var in tf.trainable_variables() if 'Discriminator' in var.name]
         g_vars = [var for var in tf.trainable_variables() if 'Generator' in var.name]
         loss = {

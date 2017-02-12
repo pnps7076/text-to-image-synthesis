@@ -31,10 +31,9 @@ def train_fn(nEpochs,image_path,saved_sess=None):
         n = int(dp.nImgs*nEpochs/dcgan.batch_size)
         curr_loss_g = curr_loss_d = 1.
         for i in range(n):
-            real_imgs,real_captions,wrong_imgs = dp.read_batch(overfit=False)
+            real_imgs,real_captions,wrong_imgs,captions_txt = dp.read_batch(overfit=False)
             z = np.random.uniform(-1,1,size=[dcgan.batch_size,dcgan.z_dim])
-            if i%5==0 or (curr_loss_g/curr_loss_d)<3.:
-                _,curr_loss_d,d_real,d_fake,d_wrong,gen_imgs = sess.run([d_optim,loss['loss_d'],
+	    _,curr_loss_d,d_real,d_fake,d_wrong,gen_imgs = sess.run([d_optim,loss['loss_d'],
                                                                 outs['disc_real'],
                                                                 outs['disc_fake'],
                                                                 outs['disc_wrong'],
@@ -50,7 +49,7 @@ def train_fn(nEpochs,image_path,saved_sess=None):
             _,curr_loss_g = sess.run([g_optim,loss['loss_g']],feed_dict={dcgan.z:z,
                                                                         dcgan.real_caption:real_captions,
                                                                         dcgan.train:True})
-            if i%1 == 0:
+            if i%10 == 0:
                 print "Iteration {0} Training loss:\nD_Loss:{1} \tG_Loss:{2}".format(i,curr_loss_d,curr_loss_g)
                 gen_imgs = sess.run(dcgan.gen_imgs,feed_dict={dcgan.z:z,
                                                             dcgan.real_caption:real_captions,
@@ -62,9 +61,9 @@ def train_fn(nEpochs,image_path,saved_sess=None):
                 print "Mean generated:{0} \t Mean real:{1}".format(np.mean(gen_imgs),np.mean(real_imgs))
             if i%100==0:
                 for j in range(25):
-                    scipy.misc.imsave('../Output/' + str(j) + '_' + str(i) + '_Gen.jpg',gen_imgs[j])
-                np.save('../Output/' + str(i) + '.npy',real_captions[0:25])
+                    scipy.misc.imsave('../Output/' + str(j) + '_' + str(i) + '_' + str(nEpochs) + '_Gen.jpg',gen_imgs[j])
+                np.save('../Output/' + str(i) + '.npy',captions_txt[0:25])
                 saver.save(sess,'../ckpt/' + str(dcgan.batch_size) + '_' +str(nEpochs) + '_' + str(i) + '.ckpt')
 
 if __name__=="__main__":
-    train_fn(nEpochs=10,image_path = '../jpg/')
+    train_fn(nEpochs=60,image_path = '../jpg/',saved_sess='../ckpt/128_50_3100.ckpt.meta')
