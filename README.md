@@ -28,7 +28,7 @@ Feel free to clone and add extensions. Pull Requests are welcome.
 * [Generative Adversarial Text to Image Synthesis](https://arxiv.org/abs/1605.05396)
 * [Skip-Thought Vectors](https://arxiv.org/abs/1506.06726)
 
-# Sample output
+## Sample output
 Included below are a few samples from our experiments:
 
 Input caption | Generated image
